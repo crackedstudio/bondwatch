@@ -1,0 +1,29 @@
+{
+  "contract": "SP000000000000000000002Q6VF78.pox-5",
+  "read_at": "2026-09-13 (mainnet, via api.hiro.so /v2/data_var)",
+  "bond-admin": "SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX",
+  "pause-admin": "SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX",
+  "bond_admin_equals_pause_admin": true,
+  "rewards-paused": false,
+  "configured": true,
+  "reserve-balance_sats": 120192248,
+  "total-sbtc-staked_sats": 16016587628,
+  "managers": {
+    "SPMPMA1V6P430M8C91QS1G9XJ95S59JS1TZFZ4Q4.fastpool-max500-signer-manager": {
+      "MAX_FEE_BIPS": 500,
+      "FEE_ACTIVATION_DELAY_CYCLES": 2,
+      "BIPS_DENOMINATOR": 10000,
+      "active_fees_bips": 0,
+      "pending_fees_bips": 450,
+      "pending_fees_cycle": 142,
+      "earned_fees_sats": 2383527
+    },
+    "SP8HK160YD5GHXP69VGA0TC7AQJ1X4CDW3XVERSE.xverse-signer-manager-1": {
+      "MAX_BIPS": 10000,
+      "active_fees_bips": 495
+    },
+    "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.native-pool-signer-manager": {
+      "note": "No fee variable, no update-fees, no update-admin, no admins map. 6 functions only."
+    }
+  }
+}
