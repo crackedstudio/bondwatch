@@ -1,0 +1,19 @@
+# pox-5.clar @ stacks-core tag 4.0.1 — verified constant values (item 3)
+# source: stackslib/src/chainstate/stacks/boot/pox-5.clar
+BOND_LENGTH_CYCLES          u12
+BOND_GAP_CYCLES             u2
+MAX_NUM_CYCLES              u96
+SIGNER_SET_MIN_USTX         u50000000000     ;; 50k STX
+BITCOIN_LOCKTIME_THRESHOLD  u500000000
+PRECISION                   u1000000000000000000  ;; 1e18
+RESERVE_RATIO               u1500            ;; basis points = 15%
+
+# item 1 — rewards-paused write sites (the ONLY three references in the file):
+#   L354  (define-data-var rewards-paused bool false)          <- init
+#   L493  (var-set rewards-paused true)   inside (pause-rewards)  <- only writer
+#   L2404 (asserts! (not (var-get rewards-paused)) ERR_REWARDS_PAUSED) <- read guard
+# => NO (var-set rewards-paused false) exists anywhere. pause-rewards is IRREVERSIBLE.
+
+# item 5 — source default admin literals:
+#   L348 (define-data-var bond-admin  principal 'SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX)
+#   L353 (define-data-var pause-admin principal 'SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX)
