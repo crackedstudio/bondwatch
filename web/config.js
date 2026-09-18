@@ -9,7 +9,7 @@ export const CHAIN = 'mainnet';
 export const REFRESH_MS = 60_000;
 
 // Repo links shown in the "why" section and footer.
-export const REPO_URL = 'https://github.com/Otaiki/bondwatch';
+export const REPO_URL = 'https://github.com/crackedstudio/bondwatch';
 export const FINDINGS_URL = `${REPO_URL}/blob/main/FINDINGS.md`;
 export const SIP_045_URL =
   'https://github.com/stacksgov/sips/blob/main/sips/sip-045/sip-045-pox-5-bitcoin-staking.md';
