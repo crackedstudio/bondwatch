@@ -33,7 +33,7 @@ python3 scripts/read_bond_state.py           # reads mainnet via api.hiro.so
 renders the protocol pause/admin state plus every pool signer-manager's
 fee/admin surface, auto-refreshing every 60 s. No wallet, no backend.
 
-- **Deployed:** _TODO — add URL after `vercel deploy --cwd web --prod`_
+- **Deployed:** https://bondwatch.vercel.app
 - **Run locally:** `python3 -m http.server -d web 8080` then open http://localhost:8080
 - Details, deploy steps and the optional Hiro API key: [`web/README.md`](web/README.md)
 
