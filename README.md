@@ -17,6 +17,7 @@ evidence/
 scripts/
   read_bond_state.py               reads + decodes live bond state (stdlib only)
   clarinet-console-commands.md     devnet-console equivalent to run on the Mac
+web/                               live read-only dashboard (static, no build step)
 ```
 
 ## Run it
@@ -24,6 +25,17 @@ scripts/
 ```bash
 python3 scripts/read_bond_state.py           # reads mainnet via api.hiro.so
 ```
+
+## Live dashboard
+
+`web/` is a static, client-side dashboard that performs the same reads as
+`scripts/read_bond_state.py` from the browser against mainnet (Hiro API) and
+renders the protocol pause/admin state plus every pool signer-manager's
+fee/admin surface, auto-refreshing every 60 s. No wallet, no backend.
+
+- **Deployed:** _TODO — add URL after `vercel deploy --cwd web --prod`_
+- **Run locally:** `python3 -m http.server -d web 8080` then open http://localhost:8080
+- Details, deploy steps and the optional Hiro API key: [`web/README.md`](web/README.md)
 
 ## Headline results
 

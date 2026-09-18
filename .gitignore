@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# web/ dashboard — never commit keys, deps, or host state
+web/node_modules/
+web/.vercel/
+web/dist/
+web/.env
+web/.env.*
+.vercel/
+.env
+.env.*
+.claude/
