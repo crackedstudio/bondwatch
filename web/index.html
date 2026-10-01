@@ -30,6 +30,10 @@
           <svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg>
           <span>Refresh</span>
         </button>
+        <button class="btn" id="about-btn" type="button" aria-label="What is BondWatch?">
+          <svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M8 7.2v4"/><circle cx="8" cy="4.8" r=".95" fill="currentColor"/></svg>
+          <span>About</span>
+        </button>
         <button class="btn btn-icon-only" id="theme-btn" type="button" aria-label="Switch to light mode" title="Toggle light / dark">
           <svg class="icon-sun" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>
           <svg class="icon-moon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" d="M13.2 10.1A5.6 5.6 0 0 1 5.9 2.8a5.6 5.6 0 1 0 7.3 7.3z"/></svg>
@@ -86,6 +90,87 @@
       </p>
     </div>
   </footer>
+
+
+  <div class="modal-backdrop" id="about-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="about-title" aria-describedby="about-lede">
+      <button class="modal-close" id="about-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+
+      <h2 id="about-title">What BondWatch is</h2>
+      <p class="modal-lede" id="about-lede">
+        A read-only monitor for the parameters a Bitcoin staker is exposed to <em>after</em> their bond is locked.
+        Everything on this page is fetched live from Stacks mainnet in your browser. There is no backend, no wallet
+        connection, and no privileged access — you can reproduce every number yourself.
+      </p>
+
+      <section class="modal-section">
+        <h3>The problem it watches</h3>
+        <p>
+          PoX-5 (<a href="https://github.com/stacksgov/sips/blob/main/sips/sip-045/sip-045-pox-5-bitcoin-staking.md" target="_blank" rel="noopener">SIP-045</a>)
+          settles staking rewards trustlessly — that part needs no trust. The risk sits in the mutable parameters
+          <em>around</em> a bond, which can change while a staker is locked in and cannot exit:
+        </p>
+        <ul>
+          <li><strong>An irreversible pause.</strong> <code>pause-admin</code> can call <code>pause-rewards</code>. The contract contains no code path that sets the flag back — the only writer sets it to <code>true</code>. Once fired it cannot be undone without a hard fork.</li>
+          <li><strong>Concentrated admin power.</strong> <code>bond-admin</code> can rotate who holds the admin roles. On mainnet today one principal holds <em>both</em> roles, so a single key can rotate the admin set and trigger the permanent pause.</li>
+          <li><strong>Per-pool fees.</strong> Each pool runs its own signer-manager contract that decides for itself whether its fee can change, by how much, and how quickly.</li>
+        </ul>
+      </section>
+
+      <section class="modal-section">
+        <h3>Why per-pool detail is the point</h3>
+        <p>
+          A generic "watch for <code>update-fees</code>" rule gives false comfort, because the real managers do not
+          share a mechanism. BondWatch reads each contract's deployed interface and applies <em>that contract's</em> rules:
+        </p>
+        <dl class="modal-dl">
+          <dt>Fast Pool</dt><dd>Caps fees at 5% and delays changes by two cycles — but applies a queued rate <strong>automatically</strong> when its cycle arrives, without writing it back. Read the fee variable alone and you get a stale number forever.</dd>
+          <dt>Xverse</dt><dd>Permits up to 100% — an effectively uncapped fee that can be changed at will.</dd>
+          <dt>Juice Pool</dt><dd>Caps at 20%, and a change is only a <em>proposal</em> until an admin confirms it after a 144-block cooldown.</dd>
+          <dt>Native Pool</dt><dd>Exposes no on-chain fee surface at all, so its terms are set off-chain and cannot be verified here.</dd>
+        </dl>
+        <p>
+          That is why the fee shown is the rate <strong>actually charged right now</strong>, resolved against the current
+          reward cycle, rather than whatever the contract's fee variable happens to say.
+        </p>
+      </section>
+
+      <section class="modal-section">
+        <h3>Reading the badges</h3>
+        <ul class="modal-legend">
+          <li><span class="badge ok">Capped + delayed</span> A low ceiling and a delay before changes take effect.</li>
+          <li><span class="badge warn">Fee increase scheduled</span> A higher rate is queued and will apply on its own.</li>
+          <li><span class="badge bad">Fee can be raised without limit</span> The operator can change the fee with no effective ceiling.</li>
+          <li><span class="badge neutral">No on-chain fee</span> Nothing to verify on-chain; terms live elsewhere.</li>
+        </ul>
+      </section>
+
+      <section class="modal-section">
+        <h3>How to check it yourself</h3>
+        <p>
+          Every value comes from public, unauthenticated node endpoints. For example, the protocol's pause flag:
+        </p>
+        <pre class="modal-pre"><code>curl https://api.hiro.so/v2/data_var/SP000000000000000000002Q6VF78\
+/pox-5/rewards-paused?proof=0</code></pre>
+        <p class="modal-fine">
+          <code>0x04</code> is <code>false</code>, <code>0x03</code> is <code>true</code>. Contract addresses on the
+          cards link to the explorer. Method and verification trail are in
+          <a id="about-findings-link" href="#" target="_blank" rel="noopener">FINDINGS.md</a>.
+        </p>
+      </section>
+
+      <p class="modal-fine modal-disclaimer">
+        BondWatch is an independent monitor, not affiliated with any pool, and is not financial advice.
+        Data refreshes every 60 seconds.
+      </p>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="about-dismiss" type="button">View the dashboard</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="src/main.js"></script>
 </body>

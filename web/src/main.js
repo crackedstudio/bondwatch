@@ -19,6 +19,10 @@ const els = {
   theme: $('theme-btn'),
   auto: $('auto-refresh'),
   chainPos: $('chain-pos'),
+  about: $('about-modal'),
+  aboutBtn: $('about-btn'),
+  aboutClose: $('about-close'),
+  aboutDismiss: $('about-dismiss'),
   autoText: $('auto-refresh-text'),
 };
 
@@ -41,7 +45,59 @@ function applyTheme(t) {
 
 $('protocol-contract-link').href = contractUrl(`${PROTOCOL.address}.${PROTOCOL.name}`);
 $('findings-link').href = FINDINGS_URL;
+$('about-findings-link').href = FINDINGS_URL;
 $('repo-link').href = REPO_URL;
+
+// ---------------------------------------------------------------- about modal
+
+// Opens automatically on a first visit so a newcomer gets the context before
+// the numbers; afterwards it's on demand via the About button. The "seen" flag
+// is a per-viewer convenience only — if storage is unavailable the modal simply
+// shows again, which is the safe failure.
+const SEEN_KEY = 'bondwatch-about-seen';
+let lastFocus = null;
+
+function aboutOpen() {
+  if (!els.about.hidden) return;
+  lastFocus = document.activeElement;
+  els.about.hidden = false;
+  document.body.classList.add('modal-open');
+  els.aboutClose.focus();
+}
+
+function aboutHide() {
+  if (els.about.hidden) return;
+  els.about.hidden = true;
+  document.body.classList.remove('modal-open');
+  try { localStorage.setItem(SEEN_KEY, '1'); } catch { /* ignore */ }
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  else els.aboutBtn.focus();
+}
+
+els.aboutBtn.addEventListener('click', aboutOpen);
+els.aboutClose.addEventListener('click', aboutHide);
+els.aboutDismiss.addEventListener('click', aboutHide);
+// Backdrop click, but not clicks inside the dialog itself.
+els.about.addEventListener('click', (e) => { if (e.target === els.about) aboutHide(); });
+
+document.addEventListener('keydown', (e) => {
+  if (els.about.hidden) return;
+  if (e.key === 'Escape') { aboutHide(); return; }
+  if (e.key !== 'Tab') return;
+  // Keep focus inside the dialog while it is open.
+  const focusable = els.about.querySelectorAll('a[href], button, [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+(function maybeShowAbout() {
+  let seen = false;
+  try { seen = localStorage.getItem(SEEN_KEY) === '1'; } catch { /* ignore */ }
+  if (!seen) aboutOpen();
+})();
 
 // ---------------------------------------------------------------- refresh
 

@@ -7,7 +7,7 @@ bundler, no framework, no build step — `web/` is served as-is.
 
 ```
 web/
-  index.html      loads src/main.js as an ES module
+  index.html      loads src/main.js as an ES module; also holds the About modal
   styles.css      dark theme by default, light toggle, system font stack
   config.js       every contract address, manager, and known cap (no secrets)
   src/
@@ -15,7 +15,8 @@ web/
     hiro.js       fetch helpers: optional API key, 429 backoff, bounded concurrency
     monitor.js    reads pox-5 + each manager, builds the state model + risk badge
     render.js     turns the state model into DOM
-    main.js       boot: c32 self-test, load, 60 s auto-refresh, manual refresh, theme
+    main.js       boot: c32 self-test, load, 60 s auto-refresh, manual refresh,
+                  theme, and the About modal (auto-opens once per viewer)
   vercel.json     static-site config
 ```
 
