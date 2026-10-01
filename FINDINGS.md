@@ -115,6 +115,78 @@ Consequences for the notes and for the monitor design:
 
 ---
 
+## Item 4a — Fee activation is *lazy*: reading the active variable is not enough. (Added 2026-10-01, cycle 144.)
+
+The 2026-09-13 reading recorded Fast Pool at **0% active with 4.5% pending for
+cycle 142**. Re-reading on **2026-10-01, at cycle 144**, the chain says:
+
+| Var | Value |
+|---|---|
+| `fees-bips` | `u0` |
+| `pending-fees-bips` | `u450` |
+| `pending-fees-cycle` | `u142` |
+
+The activation cycle passed two cycles ago, yet `fees-bips` **still reads 0**.
+Nothing wrote the new rate back. The contract resolves it at read time instead,
+and its own source comment says to read `get-active-fee-bips` rather than either
+variable directly:
+
+```clarity
+(define-read-only (get-active-fee-bips)
+  (if (>= (current-cycle) (var-get pending-fees-cycle))
+    (var-get pending-fees-bips)
+    (var-get fees-bips)))
+```
+
+Since `144 >= 142`, **the fee actually charged is 4.5% and has been since cycle
+142**, while the variable a naive monitor reads says 0% and will keep saying 0%
+indefinitely.
+
+### This sharpens the wedge rather than contradicting it
+
+Item 4 said a monitor must read `pending-fees-bips`, not just the active var, or
+it misses a scheduled change. That is right but understates the problem. On a
+lazy-activation contract **neither raw variable is ever authoritative on its
+own** — the effective rate is a function of chain position, so the monitor has
+to evaluate the contract's activation rule against the current cycle.
+
+And the rule is not shared. Across the real managers there are three distinct
+activation models, which have to be handled separately:
+
+| Model | Pools | Behaviour | Is the active var trustworthy? |
+|---|---|---|---|
+| **lazy-cycle** | Fast Pool | Pending applies automatically once its cycle is reached; never written back | **No** — goes stale permanently |
+| **confirm-block** | Juice | Pending is a *proposal*; an admin must call `confirm-fee-bips` after `FEE_COOLDOWN` (144 burn blocks), which writes the var | Yes |
+| **direct** | Xverse ×3, Native, PlanBetter | The mutator writes the active var immediately | Yes |
+
+Applying the wrong model is wrong in both directions: use Juice's rule on Fast
+Pool and you under-report a fee that is already being charged; use Fast Pool's
+rule on Juice and you invent a fee increase that an admin may never confirm, or
+may cancel outright via `cancel-fee-bips`.
+
+### Found in production, by the tool itself
+
+This is not a hypothetical. The BondWatch dashboard shipped on 2026-09-18 read
+`fees-bips` directly and therefore displayed *"Active fee 0%"* with a badge
+reading *"activates cycle 142"* — a cycle already in the past — for roughly two
+weeks. It was making precisely the mistake this document warns about, and the
+error only became visible because the monitor was left running against mainnet
+while the chain moved underneath it.
+
+Fixed in `3d5d394`: chain position is read from `/v2/pox` and the effective rate
+is resolved per manager through an explicit `activation` model. Note that
+`POST /v2/contracts/call-read-only` returns 404 on the public Hiro endpoint, so
+the rule is reproduced client-side rather than executed on a node; if `/v2/pox`
+is unavailable the dashboard falls back to raw variables and says so, rather
+than silently reporting a stale number.
+
+**Monitoring rule this yields:** alert on the *effective* rate changing, not on
+`update-fees` being called. A lazy activation changes what a staker pays with no
+transaction at all — there is no event to subscribe to, and nothing in the
+mempool. Fee monitoring that watches only for transactions cannot see it.
+
+---
+
 ## What this proves
 
 Every field a delegator is exposed to after their bond is locked — the
