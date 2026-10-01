@@ -1,0 +1,58 @@
+{
+  "contract": "SP000000000000000000002Q6VF78.pox-5",
+  "read_at": "2026-10-01 (mainnet, via api.hiro.so /v2/data_var)",
+  "chain": {
+    "pox_reward_cycle": 144,
+    "burn_block_height": 969419
+  },
+  "supersedes": "live-state.json (2026-09-13) — kept for comparison, not overwritten",
+  "bond-admin": "SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX",
+  "pause-admin": "SP72DMR3MJKS7RVBY33JVV7EEJSQ1PYDVKDP10FX",
+  "bond_admin_equals_pause_admin": true,
+  "rewards-paused": false,
+  "configured": true,
+  "reserve-balance_sats": 190038551,
+  "total-sbtc-staked_sats": 16016587628,
+  "managers": {
+    "SPMPMA1V6P430M8C91QS1G9XJ95S59JS1TZFZ4Q4.fastpool-max500-signer-manager": {
+      "activation_model": "lazy-cycle",
+      "MAX_FEE_BIPS": 500,
+      "FEE_ACTIVATION_DELAY_CYCLES": 2,
+      "BIPS_DENOMINATOR": 10000,
+      "fees_bips_var": 0,
+      "pending_fees_bips": 450,
+      "pending_fees_cycle": 142,
+      "effective_fees_bips": 450,
+      "effective_rule": "get-active-fee-bips: (if (>= current-cycle pending-fees-cycle) pending-fees-bips fees-bips)",
+      "note": "Activation cycle 142 passed (now 144); the pending rate is IN FORCE while fees-bips still reads 0. Reading fees-bips alone understates the fee.",
+      "earned_fees_sats": 0
+    },
+    "SP8HK160YD5GHXP69VGA0TC7AQJ1X4CDW3XVERSE.xverse-signer-manager-1": {
+      "activation_model": "direct",
+      "MAX_BIPS": 10000,
+      "fees_bips_var": 495,
+      "effective_fees_bips": 495,
+      "earned_fees_sats": 0
+    },
+    "SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22.juice-pool-stx-signer": {
+      "activation_model": "confirm-block",
+      "MAX_FEE_BIPS": 2000,
+      "FEE_COOLDOWN_burn_blocks": 144,
+      "fee_bips_var": 0,
+      "effective_fees_bips": 0,
+      "pending_fee": null,
+      "pending_fee_height": 0,
+      "note": "Pending is a proposal only; confirm-fee-bips must be called after the cooldown. pending-fee is currently none."
+    },
+    "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.native-pool-signer-manager": {
+      "activation_model": "none",
+      "note": "No fee variable, no update-fees, no update-admin, no admins map. 4 public functions."
+    }
+  },
+  "changes_since_2026-09-13": [
+    "Fast Pool: pending 4.5% @ cycle 142 is now IN FORCE (chain at cycle 144); fees-bips still reads 0.",
+    "Fast Pool: earned-fees 2383527 sats -> 0 (fees withdrawn from the contract).",
+    "pox-5: reserve-balance 120192248 sats -> 190038551.",
+    "pox-5: total-sbtc-staked unchanged at 16016587628 sats."
+  ]
+}

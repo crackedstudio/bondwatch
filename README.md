@@ -14,6 +14,7 @@ evidence/
   pox-5-interface.json             deployed contract interface (119 functions)
   pox-5-constants.txt              constant values + rewards-paused write sites
   live-state.json                  decoded live mainnet reads (2026-09-13)
+  live-state-2026-10-01.json       second dated snapshot; shows what moved since
 scripts/
   read_bond_state.py               reads + decodes live bond state (stdlib only)
   clarinet-console-commands.md     devnet-console equivalent to run on the Mac
