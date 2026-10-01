@@ -107,6 +107,21 @@ export function getInterface(address, contract, opts) {
     getJson(`/v2/contracts/interface/${address}/${contract}`, opts));
 }
 
+/**
+ * Chain position: the current PoX reward cycle and burn block height.
+ * Needed to evaluate fee-activation rules that contracts apply lazily at read
+ * time (see monitor.js). Not cached — it moves.
+ */
+export async function getPoxInfo(opts) {
+  const j = await getJson('/v2/pox', opts);
+  const cycleId = j?.current_cycle?.id ?? j?.reward_cycle_id;
+  if (cycleId == null) throw new Error('No current cycle in /v2/pox');
+  return {
+    cycle: Number(cycleId),
+    burnHeight: Number(j.current_burnchain_block_height ?? 0),
+  };
+}
+
 export function getSource(address, contract, opts) {
   return cached(`src:${address}.${contract}`, async () => {
     const j = await getJson(`/v2/contracts/source/${address}/${contract}?proof=0`, opts);

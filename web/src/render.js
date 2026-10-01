@@ -155,24 +155,41 @@ export function renderPool(m) {
   const feeMutable = m.canChangeFee || m.feeMutators.length > 0;
   const adminMutable = m.canChangeAdmin || m.adminMutators.length > 0;
 
-  // Active fee
-  let feeHtml;
+  // Active fee — the rate actually charged now, per the contract's own
+  // activation rule, which is not always what the active data var says.
+  const fee = m.fee;
+  let feeHtml, staleNote = '';
   if (!m.hasFeeSurface) {
     feeHtml = `<div class="fee-big"><span class="unavailable">no on-chain fee</span></div>`;
   } else if (!m.active) {
     feeHtml = `<div class="fee-big"><span class="unavailable">not present</span></div>`;
   } else if (m.active.error) {
     feeHtml = `<div class="fee-big">${unavailable(m.active.error.message)}</div>`;
+  } else if (fee && fee.effectiveBips != null) {
+    const src = fee.rawIsStale
+      ? `<code>${esc(m.pendingBips.name)}</code> = ${fee.effectiveBips}, in force`
+      : `<code>${esc(m.active.name)}</code> = ${fee.effectiveBips}`;
+    feeHtml = `<div class="fee-big">${fmtBipsPct(fee.effectiveBips, denom)}<small>${src}</small></div>`;
+    if (fee.rawIsStale) {
+      staleNote = `<p class="pool-note">The contract applies a queued rate automatically at its activation cycle without writing it back, so <code>${esc(m.active.name)}</code> still reads ${fmtBipsPct(fee.rawBips, denom)}. Reading that var alone understates the fee.</p>`;
+    }
   } else {
-    feeHtml = `<div class="fee-big">${fmtBipsPct(m.active.value, denom)}<small><code>${esc(m.active.name)}</code> = ${m.active.value}</small></div>`;
+    feeHtml = `<div class="fee-big"><span class="unavailable">not present</span></div>`;
   }
 
-  // Pending
+  // Queued change
   let pendingHtml = '';
-  if (m.pendingDiffers) {
-    const cycle = m.pendingCycle && m.pendingCycle.value != null ? m.pendingCycle.value : null;
-    const unit = m.pendingCycle?.name?.includes('height') ? 'block' : 'cycle';
-    pendingHtml = `<span class="badge warn">Scheduled fee change → ${fmtBipsPct(m.pendingBips.value, denom)}${cycle != null ? ` (activates ${unit} ${cycle})` : ''}</span>`;
+  const pending = fee?.pending;
+  if (pending) {
+    const at = pending.at != null ? ` ${pending.unit} ${pending.at}` : '';
+    if (pending.inForce) {
+      pendingHtml = `<span class="badge neutral">Queued change in force since${at}</span>`;
+    } else if (pending.automatic) {
+      pendingHtml = `<span class="badge warn">Scheduled fee change → ${fmtBipsPct(pending.bips, denom)} (activates${at})</span>`;
+    } else {
+      const state = pending.executable === true ? 'executable now, awaiting admin' : `executable at${at}`;
+      pendingHtml = `<span class="badge warn">Proposed fee → ${fmtBipsPct(pending.bips, denom)} (${state})</span>`;
+    }
   }
 
   // Cap
@@ -196,6 +213,11 @@ export function renderPool(m) {
   }
 
   const note = m.note && !m.hasFeeSurface ? `<p class="pool-note">${esc(m.note)}</p>` : '';
+  const activationRow = m.activation === 'lazy-cycle'
+    ? `<dt>Activation</dt><dd>automatic at cycle <span class="via">(no tx needed)</span></dd>`
+    : m.activation === 'confirm-block'
+      ? `<dt>Activation</dt><dd>admin must confirm <span class="via">(after cooldown)</span></dd>`
+      : '';
 
   return `<article class="card pool-card" data-id="${esc(m.id)}">
     ${head}
@@ -207,9 +229,11 @@ export function renderPool(m) {
       <dt>Operator can change fee</dt><dd>${yesNo(feeMutable, m.feeMutators)}</dd>
       <dt>Can change admin set</dt><dd>${yesNo(adminMutable, m.adminMutators)}</dd>
       <dt>Fee cap</dt><dd>${capTxt}</dd>
+      ${activationRow}
       ${extra.join('')}
       <dt>Public functions</dt><dd class="mono" title="${esc(m.functions.join(', '))}">${m.functions.length}</dd>
     </dl>
+    ${staleNote}
     ${note}
   </article>`;
 }
@@ -219,6 +243,13 @@ export function renderPools(el, managers) {
 }
 
 // ---------------------------------------------------------------- chrome
+
+export function renderChainPos(el, chain) {
+  if (!chain) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = `cycle ${chain.cycle}`;
+  el.title = `Current PoX reward cycle ${chain.cycle} · burn block ${chain.burnHeight.toLocaleString('en-US')}. Fee activation rules are evaluated against this.`;
+}
 
 export function renderBanner(el, { kind, text } = {}) {
   if (!text) { el.hidden = true; el.textContent = ''; el.className = 'banner'; return; }

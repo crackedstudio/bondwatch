@@ -6,7 +6,7 @@ import { apiKey } from './hiro.js';
 import { readAll } from './monitor.js';
 import {
   renderProtocol, renderPools, renderProtocolSkeleton, renderPoolsSkeleton,
-  renderBanner, contractUrl, fmtTime,
+  renderBanner, renderChainPos, contractUrl, fmtTime,
 } from './render.js';
 
 const $ = (id) => document.getElementById(id);
@@ -18,6 +18,7 @@ const els = {
   refresh: $('refresh-btn'),
   theme: $('theme-btn'),
   auto: $('auto-refresh'),
+  chainPos: $('chain-pos'),
   autoText: $('auto-refresh-text'),
 };
 
@@ -81,13 +82,19 @@ async function refresh(reason = 'manual') {
     try {
       const state = await readAll();
       renderProtocol(els.protocol, state.protocol);
+      renderChainPos(els.chainPos, state.chain);
       renderPools(els.pools, state.managers);
       lastOk = state.readAt;
       els.updated.textContent = fmtTime(state.readAt);
       els.updated.title = state.readAt.toISOString();
 
       const failed = state.managers.filter((m) => m.error).length;
-      if (state.protocol.anyError || failed) {
+      if (state.chainError) {
+        renderBanner(els.banner, {
+          kind: '',
+          text: 'Could not read the current PoX cycle, so fee-activation rules could not be evaluated — fees shown are raw contract variables and may understate the rate actually charged.',
+        });
+      } else if (state.protocol.anyError || failed) {
         renderBanner(els.banner, {
           kind: '',
           text: `Some reads failed${failed ? ` (${failed} pool${failed > 1 ? 's' : ''} unavailable)` : ''} — showing what could be read. The Hiro API may be rate-limiting; add <code>?hiroKey=…</code> for a higher limit.`,

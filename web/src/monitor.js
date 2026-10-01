@@ -5,7 +5,7 @@
 import {
   PROTOCOL, MANAGERS, FEE_MUTATORS, ADMIN_MUTATORS, CAP_CONSTANTS, BIPS_DENOMINATOR,
 } from '../config.js';
-import { getDataVarHex, getInterface, getSource, HttpError } from './hiro.js';
+import { getDataVarHex, getInterface, getSource, getPoxInfo, HttpError } from './hiro.js';
 import { decodeBool, decodeUint, decodePrincipal, decoderFor } from './clarity.js';
 
 const PROTOCOL_DECODERS = { principal: decodePrincipal, bool: decodeBool, uint: decodeUint };
@@ -74,7 +74,7 @@ async function readVarGroup(m, iface, names, opts) {
   return null; // not present
 }
 
-export async function readManager(m, opts) {
+export async function readManager(m, chain, opts) {
   const contractId = `${m.address}.${m.contract}`;
   const base = { ...m, contractId };
 
@@ -114,11 +114,7 @@ export async function readManager(m, opts) {
   }
 
   const hasFeeSurface = feeMutators.length > 0 || !!active;
-  const pendingIsSome = pendingBips && pendingBips.value != null;
-  const pendingHigher =
-    pendingIsSome && active && active.value != null && pendingBips.value > active.value;
-  const pendingDiffers =
-    pendingIsSome && (!active || active.value == null || pendingBips.value !== active.value);
+  const fee = resolveFee(m, { active, pendingBips, pendingCycle }, chain);
 
   const model = {
     ...base,
@@ -128,11 +124,71 @@ export async function readManager(m, opts) {
     canChangeFee, canChangeAdmin, feeMutators, adminMutators,
     hasFeeSurface,
     active, pendingBips, pendingCycle, earned, paused,
-    pendingHigher, pendingDiffers,
+    fee,
     caps, capsSource,
   };
   model.risk = riskFor(model);
   return model;
+}
+
+/**
+ * Resolve the rate actually charged right now, per the contract's own
+ * activation rule, plus the state of any queued change.
+ *
+ * The important case is 'lazy-cycle' (Fast Pool): once the activation cycle is
+ * reached the contract starts charging `pending-fees-bips` but never writes it
+ * back to `fees-bips`, so the active var is stale and reading it alone
+ * understates the fee. We reproduce `get-active-fee-bips`:
+ *
+ *   (if (>= (current-cycle) pending-fees-cycle) pending-fees-bips fees-bips)
+ *
+ * Returns null when the manager exposes no fee at all.
+ */
+export function resolveFee(m, vars, chain) {
+  const { active, pendingBips, pendingCycle } = vars;
+  const raw = active && !active.error ? active.value : null;
+  const pBips = pendingBips && !pendingBips.error ? pendingBips.value : null;
+  const pAt = pendingCycle && !pendingCycle.error ? pendingCycle.value : null;
+  if (raw == null && pBips == null) return null;
+
+  const mode = m.activation || 'direct';
+  const base = { mode, rawBips: raw, effectiveBips: raw, rawIsStale: false, pending: null };
+
+  // A queued change only counts as one when it actually differs from the
+  // active rate; an untouched contract leaves both vars at 0.
+  const hasQueued = pBips != null && (raw == null || pBips !== raw);
+
+  if (mode === 'lazy-cycle') {
+    const cycle = chain?.cycle;
+    if (pAt == null || cycle == null) return base;
+    const inForce = BigInt(cycle) >= pAt;
+    const effective = inForce ? (pBips ?? raw) : raw;
+    return {
+      ...base,
+      effectiveBips: effective,
+      rawIsStale: inForce && pBips != null && raw != null && pBips !== raw,
+      pending: hasQueued
+        ? { bips: pBips, at: pAt, unit: 'cycle', inForce, automatic: true }
+        : null,
+    };
+  }
+
+  if (mode === 'confirm-block') {
+    // Pending is a proposal; it never applies on its own. `raw` stays correct.
+    if (!hasQueued) return base;
+    const cooldown = m.caps?.delayBlocks ?? 0;
+    const executableAt = pAt != null ? pAt + BigInt(cooldown) : null;
+    const executable =
+      executableAt != null && chain?.burnHeight != null
+        ? BigInt(chain.burnHeight) >= executableAt
+        : null;
+    return {
+      ...base,
+      pending: { bips: pBips, at: executableAt, unit: 'block', inForce: false, executable, automatic: false },
+    };
+  }
+
+  return { ...base, pending: hasQueued ? { bips: pBips, at: pAt, unit: 'cycle', inForce: false, automatic: false } : null };
 }
 
 /**
@@ -162,8 +218,17 @@ export function riskFor(m) {
   if (mutable && capPct != null && capPct >= 100) {
     return { level: 'bad', label: 'Fee can be raised without limit', detail: `Cap is ${fmtPct(capPct)} — no effective ceiling.` };
   }
-  if (m.pendingHigher) {
-    return { level: 'warn', label: 'Fee increase scheduled', detail: 'A higher fee is already queued on-chain.' };
+  const pending = m.fee?.pending;
+  // Only a change that has NOT yet taken effect is a scheduled risk; one that is
+  // already in force is simply the current rate, reflected in effectiveBips.
+  if (pending && !pending.inForce && m.fee.effectiveBips != null && pending.bips > m.fee.effectiveBips) {
+    return {
+      level: 'warn',
+      label: pending.automatic ? 'Fee increase scheduled' : 'Fee increase proposed',
+      detail: pending.automatic
+        ? 'A higher fee is queued and will apply automatically.'
+        : 'A higher fee is proposed; an admin must confirm it after the cooldown.',
+    };
   }
   if (mutable && capPct == null) {
     return { level: 'warn', label: 'Fee mutable — cap not read', detail: 'Operator can change the fee; the ceiling could not be determined.' };
@@ -188,9 +253,14 @@ function fmtPct(p) {
 // ---------------------------------------------------------------- all
 
 export async function readAll(opts) {
+  // Chain position first: fee activation rules are evaluated against it.
+  // If it fails we still render, just without lazy-activation resolution.
+  const chainRes = await safe(() => getPoxInfo(opts));
+  const chain = chainRes.value;
+
   const [protocol, managers] = await Promise.all([
     readProtocol(opts),
-    Promise.all(MANAGERS.map((m) => readManager(m, opts))),
+    Promise.all(MANAGERS.map((m) => readManager(m, chain, opts))),
   ]);
-  return { protocol, managers, readAt: new Date() };
+  return { protocol, managers, chain, chainError: chainRes.error, readAt: new Date() };
 }

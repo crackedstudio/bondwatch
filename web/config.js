@@ -41,6 +41,18 @@ export const BIPS_DENOMINATOR = 10_000;
 // `feeVars` are the candidate data-var names to try. The monitor first fetches
 // the interface and only reads names that actually exist, so a missing var is
 // "not present", never an error.
+//
+// `activation` says how a queued fee becomes the rate actually charged. This is
+// NOT cosmetic: reading `fees-bips` alone is wrong on some contracts.
+//   'lazy-cycle'    the contract applies the pending rate automatically once
+//                   the activation cycle is reached, WITHOUT writing it back to
+//                   the active var — so the active var goes stale and the
+//                   effective rate must be computed (Fast Pool's own source
+//                   says to read `get-active-fee-bips`, not either var).
+//   'confirm-block' a pending rate is only a proposal; an admin must call a
+//                   confirm function after a burn-block cooldown, which writes
+//                   the active var. The active var is authoritative.
+//   'direct'        the mutator writes the active var immediately; no queue.
 export const MANAGERS = [
   {
     id: 'fastpool',
@@ -48,6 +60,7 @@ export const MANAGERS = [
     address: 'SPMPMA1V6P430M8C91QS1G9XJ95S59JS1TZFZ4Q4',
     contract: 'fastpool-max500-signer-manager',
     primary: true,
+    activation: 'lazy-cycle',
     caps: { maxFeeBips: 500, delayCycles: 2, bipsDenominator: 10_000 },
     feeVars: {
       active: ['fees-bips'],
@@ -62,6 +75,7 @@ export const MANAGERS = [
     address: 'SP8HK160YD5GHXP69VGA0TC7AQJ1X4CDW3XVERSE',
     contract: 'xverse-signer-manager-1',
     primary: true,
+    activation: 'direct',
     caps: { maxFeeBips: 10_000 }, // 100% — effectively uncapped
     feeVars: { active: ['fees-bips'], earned: ['earned-fees'] },
   },
@@ -71,6 +85,7 @@ export const MANAGERS = [
     address: 'SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG',
     contract: 'native-pool-signer-manager',
     primary: true,
+    activation: 'direct',
     caps: null,
     feeVars: { active: ['fees-bips', 'fee-bips'] },
     note: 'Exposes no fee or admin surface on-chain — fee terms are set off-chain and cannot be verified here.',
@@ -81,6 +96,7 @@ export const MANAGERS = [
     name: 'Xverse (manager 2)',
     address: 'SP8HK160YD5GHXP69VGA0TC7AQJ1X4CDW3XVERSE',
     contract: 'xverse-signer-manager-2',
+    activation: 'direct',
     caps: { maxFeeBips: 10_000 },
     feeVars: { active: ['fees-bips'], earned: ['earned-fees'] },
   },
@@ -89,6 +105,7 @@ export const MANAGERS = [
     name: 'Xverse (manager 3)',
     address: 'SP8HK160YD5GHXP69VGA0TC7AQJ1X4CDW3XVERSE',
     contract: 'xverse-signer-manager-3',
+    activation: 'direct',
     caps: { maxFeeBips: 10_000 },
     feeVars: { active: ['fees-bips'], earned: ['earned-fees'] },
   },
@@ -97,6 +114,10 @@ export const MANAGERS = [
     name: 'Juice Pool',
     address: 'SPV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RCJDC22',
     contract: 'juice-pool-stx-signer',
+    // A proposal must be confirmed by an admin after FEE_COOLDOWN burn blocks;
+    // until then `fee-bips` is the real rate. Note `get-effective-fee-bips`
+    // also waives the fee for "og" stakers, so this is the standard rate.
+    activation: 'confirm-block',
     caps: null, // parsed from source at runtime (MAX_FEE_BIPS / FEE_COOLDOWN)
     feeVars: {
       active: ['fees-bips', 'fee-bips'],
@@ -111,6 +132,7 @@ export const MANAGERS = [
     name: 'PlanBetter',
     address: 'SP3ZA8J49HPS7M3KD7EB01Y0ZAJS7VJS2NG87MDGN',
     contract: 'planbetter-signer-manager',
+    activation: 'direct',
     caps: null,
     feeVars: { active: ['fees-bips', 'fee-bips'], earned: ['earned-fees'] },
   },
