@@ -242,6 +242,106 @@ export function renderPools(el, managers) {
   el.innerHTML = managers.map(renderPool).join('');
 }
 
+// ------------------------------------------------- fee comparison (delegator view)
+
+/**
+ * How fast this manager's fee can change, in plain language.
+ * The distinction matters: a lazy-cycle pool can start charging more with no
+ * transaction at all, so there is nothing to watch for in the mempool.
+ */
+function changeSpeed(m) {
+  if (!m.hasFeeSurface) return { text: 'n/a — not set on-chain', cls: 'neutral' };
+  if (!m.canChangeFee && !(m.feeMutators || []).length) {
+    return { text: 'cannot change on-chain', cls: 'ok' };
+  }
+  switch (m.activation) {
+    case 'lazy-cycle': {
+      const d = m.caps?.delayCycles;
+      return {
+        text: d ? `${d} cycles, then automatic (no tx)` : 'automatic at cycle (no tx)',
+        cls: 'warn',
+      };
+    }
+    case 'confirm-block': {
+      const b = m.caps?.delayBlocks;
+      return { text: b ? `admin confirms after ${b} blocks` : 'admin confirms after cooldown', cls: 'ok' };
+    }
+    default:
+      return { text: 'immediately, next transaction', cls: 'bad' };
+  }
+}
+
+/** Worst case the contract itself permits. */
+function worstCase(m) {
+  if (!m.hasFeeSurface) return { text: 'not on-chain', cls: 'neutral' };
+  const cap = m.caps?.maxFeeBips;
+  if (cap == null) return { text: 'cap not read', cls: 'warn' };
+  const denom = m.caps?.bipsDenominator ?? BIPS_DENOMINATOR;
+  const pct = (Number(cap) / denom) * 100;
+  if (pct >= 100) return { text: '100% — uncapped', cls: 'bad' };
+  return { text: fmtBipsPct(cap, denom), cls: 'ok' };
+}
+
+/**
+ * The question a delegator actually has before picking a pool: what will I pay,
+ * and how far can it move once my bond is locked and I cannot exit?
+ *
+ * Rows are sorted by what is charged right now, cheapest first; managers with
+ * no readable on-chain fee sort last because the number is unknown, not zero.
+ */
+export function renderComparison(el, managers) {
+  const rank = (m) => {
+    if (m.error) return 3;
+    if (!m.hasFeeSurface || m.fee?.effectiveBips == null) return 2;
+    return 0;
+  };
+  const rows = [...managers].sort((a, b) => {
+    const ra = rank(a); const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    if (ra !== 0) return String(a.name).localeCompare(String(b.name));
+    return Number(a.fee.effectiveBips) - Number(b.fee.effectiveBips);
+  });
+
+  const body = rows.map((m) => {
+    const name = `<a href="${contractUrl(m.contractId)}" target="_blank" rel="noopener noreferrer">${esc(m.name)}</a>`;
+    if (m.error) {
+      return `<tr><th scope="row">${name}</th><td colspan="4" class="cmp-muted">could not be read</td></tr>`;
+    }
+    const denom = m.caps?.bipsDenominator ?? BIPS_DENOMINATOR;
+    const eff = m.fee?.effectiveBips;
+    const pay = eff == null
+      ? '<span class="cmp-muted">not on-chain</span>'
+      : `<strong>${fmtBipsPct(eff, denom)}</strong>`;
+    // Flag where the obvious variable disagrees with what is actually charged.
+    const stale = m.fee?.rawIsStale
+      ? `<span class="cmp-flag" title="The contract's active fee variable still reads ${fmtBipsPct(m.fee.rawBips, denom)}; the rate in force is resolved from the activation rule.">var reads ${fmtBipsPct(m.fee.rawBips, denom)}</span>`
+      : '';
+    const w = worstCase(m);
+    const sp = changeSpeed(m);
+    const verifiable = m.hasFeeSurface
+      ? '<span class="cmp-yes">yes</span>'
+      : '<span class="cmp-no" title="No fee variable or fee mutator exists in this contract, so the fee cannot be read or monitored here. It is not necessarily zero.">no</span>';
+    return `<tr>
+      <th scope="row">${name}</th>
+      <td class="cmp-pay">${pay}${stale}</td>
+      <td class="cmp-${w.cls}">${esc(w.text)}</td>
+      <td class="cmp-${sp.cls}">${esc(sp.text)}</td>
+      <td>${verifiable}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table class="cmp">
+    <thead><tr>
+      <th scope="col">Pool contract</th>
+      <th scope="col">You pay now</th>
+      <th scope="col">Worst case allowed</th>
+      <th scope="col">How fast it can change</th>
+      <th scope="col">Fee on-chain?</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+  </table>`;
+}
+
 // ---------------------------------------------------------------- chrome
 
 export function renderChainPos(el, chain) {

@@ -53,9 +53,21 @@
       <div id="protocol" class="protocol-grid"></div>
     </section>
 
+    <section class="section" aria-labelledby="compare-heading">
+      <div class="section-head">
+        <h2 id="compare-heading">What you&rsquo;d actually pay <span class="chip" id="chain-pos" hidden></span></h2>
+        <p class="section-note">Every pool below is a separate contract with its own fee rules. This is the rate
+          in force right now &mdash; resolved through each contract&rsquo;s own activation rule, not read off its fee
+          variable &mdash; next to how far that rate can legally move once your bond is locked and you cannot exit.</p>
+      </div>
+      <div id="comparison" class="cmp-wrap"></div>
+      <p class="section-note cmp-caveat">&ldquo;Fee on-chain? no&rdquo; does not mean free. It means the contract exposes
+        no fee variable and no fee mutator, so the rate cannot be read or monitored here and is set off-chain.</p>
+    </section>
+
     <section class="section" aria-labelledby="pools-heading">
       <div class="section-head">
-        <h2 id="pools-heading">Pool fee surface <span class="chip" id="chain-pos" hidden></span></h2>
+        <h2 id="pools-heading">Per-contract detail</h2>
         <p class="section-note">Each signer-manager is a separate contract with its own mutable fee and admin rules. Detected from the deployed interface, not assumed.</p>
       </div>
       <div id="pools" class="pool-grid"></div>

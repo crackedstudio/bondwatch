@@ -6,7 +6,7 @@ import { apiKey } from './hiro.js';
 import { readAll } from './monitor.js';
 import {
   renderProtocol, renderPools, renderProtocolSkeleton, renderPoolsSkeleton,
-  renderBanner, renderChainPos, contractUrl, fmtTime,
+  renderBanner, renderChainPos, renderComparison, contractUrl, fmtTime,
 } from './render.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +19,7 @@ const els = {
   theme: $('theme-btn'),
   auto: $('auto-refresh'),
   chainPos: $('chain-pos'),
+  comparison: $('comparison'),
   about: $('about-modal'),
   aboutBtn: $('about-btn'),
   aboutClose: $('about-close'),
@@ -139,6 +140,7 @@ async function refresh(reason = 'manual') {
       const state = await readAll();
       renderProtocol(els.protocol, state.protocol);
       renderChainPos(els.chainPos, state.chain);
+      renderComparison(els.comparison, state.managers);
       renderPools(els.pools, state.managers);
       lastOk = state.readAt;
       els.updated.textContent = fmtTime(state.readAt);
@@ -164,7 +166,7 @@ async function refresh(reason = 'manual') {
         kind: lastOk ? '' : 'bad',
         text: `${lastOk ? 'Refresh failed; showing data from ' + fmtTime(lastOk) : 'Could not load data'} — ${escapeText(err.message)}`,
       });
-      if (!lastOk) { els.protocol.innerHTML = ''; els.pools.innerHTML = ''; }
+      if (!lastOk) { els.protocol.innerHTML = ''; els.pools.innerHTML = ''; els.comparison.innerHTML = ''; }
     } finally {
       inflight = null;
       setBusy(false);
