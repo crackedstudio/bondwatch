@@ -1,7 +1,7 @@
 // Hiro API helpers: fetch with optional API key, 429 backoff, bounded
 // concurrency, and a session cache for immutable reads (interface, source).
 
-import { HIRO_BASE } from '../config.js';
+import { HIRO_HOSTS } from '../config.js';
 
 /** Optional key from `?hiroKey=` or `window.HIRO_API_KEY`. Never persisted. */
 export function apiKey() {
@@ -37,13 +37,64 @@ function release() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Hosts to try, newest-first: an explicit `?node=` override, then HIRO_HOSTS. */
+function hostList() {
+  try {
+    const override = new URLSearchParams(location.search).get('node');
+    if (override) return [override.replace(/\/+$/, ''), ...HIRO_HOSTS];
+  } catch { /* non-browser */ }
+  return HIRO_HOSTS;
+}
+
+// Index into hostList() that last answered. Starts at the preferred host and
+// only moves when that host cannot serve a request at all, so a working host
+// is reused for the rest of the session instead of re-probing every refresh.
+let hostIdx = 0;
+
+/** The host currently serving reads — shown in the footer for provenance. */
+export function currentHost() {
+  return hostList()[hostIdx] ?? HIRO_HOSTS[0];
+}
+
 /**
- * GET `path` (relative to HIRO_BASE) and parse JSON.
+ * GET `path` and parse JSON, failing over across hostList().
+ *
+ * A 404 is NOT a host problem — callers use it to mean "this var/contract is
+ * absent" — so it propagates immediately rather than retrying elsewhere.
+ * Any other exhausted failure advances to the next host.
+ */
+export async function getJson(path, opts = {}) {
+  const list = hostList();
+  let lastErr;
+  for (let i = 0; i < list.length; i++) {
+    const idx = (hostIdx + i) % list.length;
+    // Don't spend the backoff ladder on a host while alternates are untried --
+    // a dead host should be abandoned fast. The last host keeps the full ladder
+    // so a transient 429/5xx there still gets retried rather than giving up.
+    const isLast = i === list.length - 1;
+    try {
+      const out = await getJsonFrom(list[idx], path, isLast ? opts : { ...opts, retries: 0 });
+      if (idx !== hostIdx) {
+        console.warn(`[bondwatch] failed over to ${list[idx]}`);
+        hostIdx = idx;
+      }
+      return out;
+    } catch (err) {
+      if (opts.signal?.aborted) throw err;
+      if (err instanceof HttpError && err.status === 404) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * GET `base + path` and parse JSON.
  * Retries on 429 / 5xx / network failure with short exponential backoff.
  * 404 is thrown immediately as HttpError(404) so callers can treat it as "absent".
  */
-export async function getJson(path, { retries = 3, signal } = {}) {
-  const url = `${HIRO_BASE}${path}`;
+async function getJsonFrom(base, path, { retries = 3, signal } = {}) {
+  const url = `${base}${path}`;
   const headers = { Accept: 'application/json' };
   const key = apiKey();
   if (key) headers['x-api-key'] = key;

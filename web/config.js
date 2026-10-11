@@ -2,7 +2,21 @@
 // No secrets. An optional Hiro API key is read at runtime from `?hiroKey=...`
 // or `window.HIRO_API_KEY`; it is never stored in this file.
 
-export const HIRO_BASE = 'https://api.hiro.so';
+// Node hosts tried in order. The dashboard is read-only against public Stacks
+// node endpoints, so any host exposing /v2 works. Hiro's gateway cutover is
+// scheduled for 2026-10-30, so a single hardcoded host is a single point of
+// failure for a page that is meant to stay up; on a transport error or a
+// persistent 5xx the fetch layer fails over to the next host and sticks with
+// whichever one answered. A `?node=https://…` URL param is tried first.
+// Both hosts below were verified responding to /v2/pox on 2026-10-11.
+// (stacks-node-api.mainnet.stacks.co is NOT included: it no longer resolves.)
+export const HIRO_HOSTS = [
+  'https://api.hiro.so',
+  'https://api.mainnet.hiro.so',
+];
+
+/** @deprecated kept for reference; the fetch layer iterates HIRO_HOSTS. */
+export const HIRO_BASE = HIRO_HOSTS[0];
 export const EXPLORER_BASE = 'https://explorer.hiro.so';
 export const CHAIN = 'mainnet';
 
