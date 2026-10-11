@@ -187,6 +187,71 @@ mempool. Fee monitoring that watches only for transactions cannot see it.
 
 ---
 
+## Item 4b — The stale fee is now demonstrably *collecting*. (Added 2026-10-11, cycle 145.)
+
+Item 4a argued that Fast Pool's `fees-bips` was wrong: the contract had been
+charging 4.5% since cycle 142 while the variable read `u0`. That was an argument
+from the contract's own activation rule. It is no longer only an argument.
+
+Re-reading on **2026-10-11, at cycle 145**:
+
+| Var | 2026-09-13 | 2026-10-01 | 2026-10-11 |
+|---|---|---|---|
+| `fees-bips` | `u0` | `u0` | `u0` |
+| `pending-fees-bips` | `u450` | `u450` | `u450` |
+| `pending-fees-cycle` | `u142` | `u142` | `u142` |
+| `earned-fees` | 2383527 sats | 0 sats | **4644704 sats** |
+
+`earned-fees` has gone from 0 to **4,644,704 sats (0.0464 sBTC)** since the
+2026-10-01 read. Fees are being accrued, in a quantity anyone can read, at a
+rate the contract's active fee variable still reports as **zero** — and has
+reported as zero for three cycles past activation.
+
+So the failure mode is not "a monitor would eventually report a stale number."
+It is: **value is moving to the operator right now, and the obvious on-chain
+field says it isn't.** A delegator checking `fees-bips`, an explorer surfacing
+it, or a dashboard reading it — all report 0%.
+
+### Why this is not fixable by watching transactions
+
+There is no transaction to watch. Nothing was broadcast at cycle 142; the
+contract simply began resolving `get-active-fee-bips` to the pending value. A
+mempool watcher sees nothing, an event subscription sees nothing, and a
+post-hoc audit of `update-fees` calls sees only the original call that queued
+the rate — two cycles before it took effect, at a time when reporting it as the
+current fee would have been wrong.
+
+The only way to see it is to evaluate the contract's activation rule against
+current chain position on every read. That is what the monitor does, and it is
+the reason the monitor has to be per-manager-contract-aware rather than
+per-event.
+
+## Item 6 — The surface being monitored grew 4x in ten days.
+
+Same two reads:
+
+| Field | 2026-10-01 (cycle 144) | 2026-10-11 (cycle 145) | Change |
+|---|---|---|---|
+| `total-sbtc-staked` | 160.17 sBTC | **664.86 sBTC** | **+315%** |
+| `reserve-balance` | 1.900 sBTC | 3.031 sBTC | +59% |
+
+This is consistent with bond capacity being stepped up bond-over-bond, with
+each bond running six months so concurrent capacity accumulates rather than
+rolling over.
+
+It matters for this document because every risk recorded above is denominated
+in bonded value that a staker cannot withdraw. The concentration finding from
+item 5 — one principal holding both `bond-admin` and `pause-admin`, able to
+fire an irreversible `pause-rewards` — was recorded against 160 sBTC. It now
+sits over 664 sBTC. Nothing about the finding changed; the amount exposed to it
+quadrupled in ten days.
+
+The same applies to per-pool fee divergence: more bonds means more distinct
+signer-manager contracts, each with its own cap, delay and activation model,
+and no shared mechanism to generalise over.
+
+---
+
 ## What this proves
 
 Every field a delegator is exposed to after their bond is locked — the
